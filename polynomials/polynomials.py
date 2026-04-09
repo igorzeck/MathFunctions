@@ -6,7 +6,7 @@ to_upscritp = lambda val: ''.join([UPPERSCRIPT[int(c)] for c in str(val)])
 # Classes
 class Monomio:
     """Representação de monômios reais"""
-    def __init__(self, coef: complex, exp: int, var: str = 'x'):
+    def __init__(self, coef: complex, exp: int = 1, var: str = 'x'):
         self.coef = coef
         self.exp = exp if exp > 0 else 0
         self.var = var
@@ -25,9 +25,14 @@ class Monomio:
             else:
                 # Por agora sem suporte! Uma vez que do contrário teria que ter
                 # Suporte para monômios com múltiplas variáveis
-                raise ValueError(f"Variáveis {other.var} != {self.var}! Sem suporte!")
+                # Teoricamente retornaria um Poli!
+                return Polinomio([other.coef, self.coef])
+                # raise ValueError(f"Variáveis {other.var} != {self.var}! Sem suporte!")
         else:
             raise ValueError("Valor inválido!")
+    def __iadd__(self, other):
+        # Estranho que ele espere um retorno!
+        return self + other
     def __sub__(self, other):
         if isinstance(other, Monomio):
             # self.__add__(-other) também seria possível! (Teria que definir __neg__
@@ -56,6 +61,11 @@ class Monomio:
                 raise ValueError(f"Variáveis {other.coef} != {self.coef}! Sem suporte!")
         else:
             raise ValueError("Valor inválido!")
+    # - Computacionais -
+    def get_gr(self):
+        return self.gr
+    def e_nulo(self):
+        return self.coef == 0
     # - Representação -
     def __str__(self):
         # Por agora sem to_upscritp
@@ -66,73 +76,84 @@ class Monomio:
 
 class Polinomio:
     """Classe para polinomios"""
-    def __init__(self, monos: list[Monomio], letra: str = 'P'):
+    def __init__(self, monos: list, letra: str = 'P'):
         # Organiza os monômios em um dicionário onde o grau é a chave
         # Deixa os monômios em ordem decrescente de grau
-        # TODO: Somar poli de mesmo graus aqui! (a.k.a Colpsar o polinômio)
-        self.monos = sorted(monos, key=lambda m: m.gr, reverse=True)
+        # TODO: Somar poli de mesmo graus aqui! (a.k.a Colapsar o polinômio)
+        # Possível Polinômio na lista!
+
+        max_gr = max(monos, key=Monomio.get_gr).gr
+        # Adiciona elementos de mesmo grau
+        # TODO: Arrumar dicionário para ter suporte para variáveis diferentes
+        # TODO: Talvez uma lista de dicionários por variável?
+        self.monos = dict()
+        
+        for k in range(max_gr + 1):
+            todos_gr = [m for m in monos if m.gr == k]
+            if todos_gr:
+                if len(todos_gr) > 1:
+                    v = todos_gr[0]
+                    for v1 in todos_gr[1:]:
+                        v += v1
+                else:
+                    v = todos_gr[0]
+                self.monos[k] = v
         self.letra = letra
     # - Matemáticos -
     @property
     def gr(self):
         # return max([m.gr() for m in self.monos if m])
-        # Uma vez que estão em ordem decrescente de grau!
-        return self.monos[0].gr
+        return len(self.monos)
+    def get_coefs(self):
+        for m in range(max(self.monos), -1, -1):
+            if m in self.monos:
+                mono = self.monos[m]
+                yield mono.coef
+            else:
+                yield 0
     def __add__(self, other):
-        # TODO: talvez com sistema de POPS pra ir registrnado monos.?
-        e_mono = isinstance(other, Monomio)
-        e_poli = isinstance(other, Polinomio)
-        novos_mono: list[Monomio] = []
-        if e_mono or e_poli:
-            if e_poli:
-                nova_letra = f"[{self.letra} + {other.letra}]"
-                for mono in self:
-                    temp_monos = []
-                    for o_mono in other:
-                        if mono.var == o_mono.var:
-                            if mono.gr == o_mono.gr:
-                                temp_monos.append(mono + o_mono)
-                    if not temp_monos:
-                        novos_mono.append(mono)
-                    else:
-                        novos_mono.extend(temp_monos)
-            elif e_mono:
-                nova_letra = self.letra # TODO: Arrumar outro jeito!
-                for mono in self:
-                    if mono.gr == other.gr:
-                        novos_mono.append(mono + other) # Assume polinômio colapsado!
-                    else:
-                        novos_mono.append(mono)
-        else:
-            raise ValueError("Sem suporte!")
-        return Polinomio(monos = novos_mono, letra = nova_letra)
+        monos_l = []
+        for k in set(self.monos.keys()).union(set(other.monos.keys())):
+            # TODO: Streamline isso aqui
+            if k in self.monos and k in other.monos:
+                # Possível que seja um Poli!
+                monos_l.append(self.monos[k] + other.monos[k])
+            elif k in self.monos:
+                monos_l.append(self.monos[k])
+            elif k in other.monos:
+                monos_l.append(self.monos[k])
+                
+        return Polinomio(monos_l, letra = "[" + self.letra + "+" + other.letra + "]")
     # - Computacionais -
     def get_vars(self):
         """Returna variáveis ordenadas alfabeticamente"""
-        return sorted(list({m.var for m in self.monos}))
+        return sorted(list({self.monos[k].var for k in self.monos}))
     def __iter__(self):
-        for mono in self.monos:
-            yield mono
+        # O sorted é para garantir que venham em ordem garantidamente
+        for m in range(max(self.monos), -1, -1):
+            if m in self.monos:
+                mono = self.monos[m]
+                yield mono
     # - Representação -
     def __str__(self):
         # Por agora sem to_upscritp
-        return f"{self.letra}({','.join(v for v in self.get_vars())}) = {' + '.join([str(m) for m in self])}"
+        return f"{self.letra}({','.join(v for v in self.get_vars())}) = {self.eq}"
     def __repr__(self):
         return self.__str__()
+    @property
+    def eq(self):
+        return f"{' + '.join([str(m) for m in self if not m.e_nulo()])}"
     
 
 
 def main():
     m = Monomio(300.09, 3)
-    n = Monomio(200.09, 3, var='y')
-    r = Monomio(2, 2)
-    s = Monomio(3,2)
-    p = Polinomio([m * r, n])
-    p1 = Polinomio([m], letra = "P1")
-    p2 = Polinomio([n], letra = "P2")
-    print(p1)
-    print(p2)
-    print(p1 + p2)
+    n = Monomio(200.09, 4)
+    o = Monomio(100.09, 3)
+    p1 = Polinomio([m,n,o], letra = "P")
+    p2 = Polinomio([m,o], letra = "Q")
+    print(f"({p1.eq})+({p2.eq})=({(p1+p2).eq})")
+    print(list(p1.get_coefs()))
 
 
 if __name__ == "__main__":
