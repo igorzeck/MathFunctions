@@ -16,13 +16,12 @@ class Monomio:
     def gr(self):
         return self.exp
     def __neg__(self):
-        """Expressão curada para caso seja MonomioNulo (que extende dessa classe!)"""
-        if isinstance(self, Monomio):
-            return Monomio(-self.coef, -self.exp, -self.var)
-        else:
-            return self
+        return Monomio(-self.coef, -self.exp, self.var)
     def __add__(self, other):
         if isinstance(other, Monomio):
+            if other.nulo():
+                # Elemento nulo!
+                return self
             if other.var != self.var:
                 # Por agora sem suporte completo! Uma vez que do contrário teria que ter
                 # Suporte para monômios com múltiplas variáveis
@@ -45,7 +44,10 @@ class Monomio:
     def __sub__(self, other):
         return self.__add__(-other)
     def __mul__(self, other):
-        if isinstance(other, Monomio):
+        if isinstance(other, (int, float, complex)):
+            # Para todos efeitos um poli./mono. constante (exceto o complexo)
+            return Monomio(self.coef * other, self.exp, self.var)
+        elif isinstance(other, Monomio):
             if other.var == self.var:
                 return Monomio(other.coef * self.coef, other.exp + self.exp, self.var)
             else:
@@ -57,11 +59,12 @@ class Monomio:
     # - Computacionais -
     def get_gr(self):
         return self.gr
+    # Talvez property? Se for o caso teria que mudar pra tirar do MonoNulo!
     def nulo(self):
         return False
     # - Representação -
     def __str__(self):
-        # Por agora sem to_upscritp
+        # Por agora sem "to_upscritp"
         str_coef = f"{(round(self.coef, 1) if isinstance(self.coef,float) else self.coef)}"
         str_exp = f"{self.var}^({self.exp})" if self.exp else ""
         return f"{str_coef}{str_exp}"
@@ -71,14 +74,21 @@ class Monomio:
 
 class MonoNulo(Monomio):
     """Representação de um monômio nulo. Variável e expoentes são irrelevantes"""
-    def __init__(self, coef = 0, exp = 0, var = 'x'):
+    def __init__(self):
         # TODO: Talvez exp = -1 (já que não podem ser menor que 0 de qualquer jeito)?
-        super().__init__(coef, exp, var)
+        super().__init__(0, 0, 'x')
     # - Matemáticos -
+    def __neg__(self):
+        return self
     def __add__(self, other):
         return other
     def __sub__(self, other):
         return other
+    def __mul__(self, other):
+        # Por "performance" retorna a mesma entidade...
+        # Idealmente haveria apenas um MonoNulo que seria referenciado em todo lugar!
+        # TODO: Ver como ter um único valor passado por referência (já deveria ser?)
+        return self
     # - Computacionais -
     def nulo(self):
         return True
@@ -86,7 +96,7 @@ class MonoNulo(Monomio):
 
 class Polinomio:
     """Classe para polinomios"""
-    def __init__(self, monos: list, letra: str = 'P'):
+    def __init__(self, monos: list, nome: str = 'P'):
         # Organiza os monômios em um dicionário onde o grau é a chave
         # Deixa os monômios em ordem decrescente de grau
         max_gr = max(monos, key=Monomio.get_gr).gr
@@ -114,8 +124,9 @@ class Polinomio:
                     if not v.nulo():
                         self.monos[var][k] = v
                         self.monos_pool.append(v)
+        
         self.monos_pool.sort(key=Monomio.get_gr, reverse=True)
-        self.letra = letra
+        self.letra = nome
     # - Matemáticos -
     @property
     def gr(self):
@@ -150,9 +161,31 @@ class Polinomio:
                     monos_l.append(self.monos[var][k])
                 elif k in other.monos[var]:
                     monos_l.append(self.monos[var][k])
-        return Polinomio(monos_l, letra = "[" + self.letra + "+" + other.letra + "]")
+        return Polinomio(monos_l, nome = "[" + self.letra + "+" + other.letra + "]")
     def __sub__(self, other):
         return self.__add__(-other)
+    def __mul__(self, other):
+        mono_l = []
+        novo_nom = self.letra
+        if isinstance(other, (int, float, complex, Monomio)):
+            # Extrair nome de uma variável como essa é mais complexo que necessário
+            # Nome se mantém!
+            for mono in self.monos_pool:
+                mono_l.append(mono * other)
+        elif isinstance(other, Polinomio):
+            novo_nom += other.letra
+            # Distributiva
+            # NOTE: Por simplicidade só é feito entre mesmas variáveis
+            if len(set(other.get_vars() + self.get_vars())) > 1:
+                raise IndexError("Multiplicação suportada apenas entre polinômios de mesma variável!")
+            
+            for mono_s in self.monos_pool:
+                for mono_o in other.monos_pool:
+                    mono_l.append(mono_o * mono_s)
+            print(mono_l)
+        else:
+            raise ValueError(f"Valor inválido para multiplicação: {other}")
+        return Polinomio(mono_l, nome=novo_nom)
     # - Computacionais -
     def get_vars(self):
         """Retorna variáveis ordenadas alfabeticamente"""
@@ -171,19 +204,19 @@ class Polinomio:
         return self.mono[key]
     @property
     def eq(self):
-        # TODO: Melhorar formatação para números negativos!
-        return f"{' + '.join([str(m) for m in self if not m.nulo()])}"
+        return f"{' + '.join([(str(m) if m.coef > 0 else f"[{str(m)}]") for m in self if not m.nulo()])}"
 
 
 def main():
-    m = Monomio(300.09, 3)
-    n = Monomio(200.09, 4)
-    o = Monomio(100.09, 3, var="y")
-    v = Monomio(300.09, 3, var="y")
-    p1 = Polinomio([m,n,o], letra = "P")
-    p2 = Polinomio([m,v], letra = "Q")
-    print(list(p1.get_coefs()))
-    print(f"({p1.eq})-({p2.eq})=({(p1-p2).eq})")
+    m = Monomio(3, 3)
+    n = Monomio(2, 4)
+    o = Monomio(1, 2,)
+    v = Monomio(3, 3, var="y")
+    p1 = Polinomio([m,n], nome = "P")
+    p2 = Polinomio([m,o], nome = "Q")
+    k = 3
+
+    print(f"({p1.eq})*({p2.eq})=({(p1 * p2).eq})")
 
 
 if __name__ == "__main__":
