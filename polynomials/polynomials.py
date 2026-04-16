@@ -104,7 +104,7 @@ class Monomio:
     def __repr__(self):
         return self.__str__()
 
-
+# TODO: Termo indie?
 # Utilizando Singleton pattern
 class MonoNulo(Monomio):
     # Classe(params) -> el = __new__(cls) -> el.__init__(self, params)
@@ -160,6 +160,7 @@ class Polinomio:
         self.monos = monos
         self.monos_pool = monos_pool
         self.nome = nome
+        self._raizes = set()
     @staticmethod
     def compor(lista_monos: list[Monomio], nome: str = 'P'):
         """Cria um polinômio com base em uma lista de monômios ou uma string"""
@@ -200,6 +201,24 @@ class Polinomio:
     @property
     def gr(self):
         return max([m.gr for m in self.monos_pool if m])
+    def get_raizes(self):
+        if not self._raizes:
+            self._calc_raiz()
+        return self._raizes
+    def get_coef_k(self, k: int, var: str = ""):
+        if abs(k) > self.gr:
+            raise ValueError(f"Não há coeficiente {k} para polinômio de grau {self.gr}")
+        # Suporte para index negativo
+        if k >= 0:
+            # Note que o índice 0 refere-se ao "último" elemento
+            k = self.gr - k
+        if not var:
+            var = self.get_vars()[0]
+        if k in self.monos[var]:
+            return self.monos[var][k].coef
+        else:
+            return 0
+
     def get_coefs(self, var: str = ""):
         # Por padrão é a "primeira" do Polinômio
         # Polinômio garantidamente sempre terá variável!
@@ -304,6 +323,22 @@ class Polinomio:
             i += 1
         
         return Polinomio.compor(quociente, nome='Q'), resto
+    def _calc_raiz(self, var: str = ""):
+        if not var:
+            var = self.get_vars()[0]
+
+        autoreciproco = all([self.get_coef_k(k) == self.get_coef_k(self.gr - k) for k in range(self.gr // 2)])
+        # -- Raizes triviais --
+        # Por agora apenas suporte para uma variável
+        # Raiz 0
+        if self.get_coef_k(-1) == 0:
+            self._raizes.add(0)
+        # - Raizes autorecíprocas e recíprocas -
+        # Raiz 1
+        if sum(self.get_coefs()) == 0:
+            self._raizes.add(1)
+        
+        # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
     # - Computacionais -
     def get_vars(self):
         """Retorna variáveis ordenadas alfabeticamente"""
@@ -330,14 +365,22 @@ class Polinomio:
 
 
 def main():
-    m = Monomio(1.0, 3)
-    n = Monomio(2, 4)
-    o = Monomio(2, 3)
-    print(m + n)
+    m = Monomio(1.0, 2)
+    n = Monomio(2, 1)
+    o = Monomio(1.0, 0)
+    p = Monomio(3, 1)
+    q = Monomio(3, 0)
+    r = Monomio(3, 4)
+    s = Monomio(-3, 3)
+    # print(m + n)
     # o = Monomio(1, 2)
     # v = Monomio(3, 3, var="y")
-    p1 = Polinomio.compor([m,n,o], nome = "P") # Grau 4
-    p2 = Polinomio.compor([m,o], nome = "Q") # Grau 3
+    p1 = Polinomio.compor([m,n,o], nome = "P")
+    p2 = Polinomio.compor([p,q], nome = "Q")
+    p3 = Polinomio.compor([r,s], nome = "R")
+
+    print(p3)
+    print(p3.get_raizes())
     
     # ex1 = Polinomio(monos = [Monomio(exp = 5),
     #                          Monomio(2, 4),
@@ -361,9 +404,9 @@ def main():
 
 
     # print(f"({p1.eq})/({k})=({(p1 / k)})")
-    print(p1, p2)
+    # print(p1, p2)
     # print(f"({p2.eq})/({p1.eq})=({(p2 / p1)})")
-    print(f"({p1.eq})/({p2.eq})=({(p1 / p2)})")
+    # print(f"({p1.eq})/({p2.eq})=({(p1 / p2)})")
     # print(f"({p1.eq})*({p2.eq})=({(p1 * p2).eq})")
 
 
