@@ -14,7 +14,28 @@ class Monomio:
     Funções constantes podem ser representadas com o valor de variável vazia
     """
     # TODO: Suporte para inserção por string para o __init__
-    def __init__(self, coef: complex = 1, exp: int = 1, var: str = 'x'):
+    def __init__(self, *args, **kwargs):
+        # Valores default
+        coef: complex = 1
+        var: str = 'x'
+        exp: int = 1
+        expr = None
+
+        if args:
+            coef: complex = args[0]
+            if len(args) > 1:
+                exp: int = args[1]
+            if len(args) > 2:
+                var: str = args[2]
+        else:
+            coef: complex = kwargs['coef'] if 'coef' in kwargs else coef
+            exp: int = kwargs['exp'] if 'exp' in kwargs else exp
+            var: str = kwargs['var'] if 'var' in kwargs else var
+            expr: str = kwargs['expr'].lower().replace(' ', '') if 'expr' in kwargs else expr
+
+        if expr:
+            coef, var, exp = self._ler_expr(expr, coef, var, exp)
+
         self.coef = coef
         self.exp = exp if exp > 0 else 0
         self.var = var
@@ -83,6 +104,43 @@ class Monomio:
         return self.gr
     def resolver(self, x: complex) -> complex:
         return self.coef * (x ** self.exp)
+    def _ler_expr(self, expr: str, pdr_coef, pdr_var, pdr_exp):
+        if expr:
+            # Lógica é simplista (divide string em três ao redo da variável)
+            i_ini = -1
+            i_fim = -1
+            for i_tmp, c in enumerate(expr):
+                if c.isalpha() and c != 'j':
+                    if i_ini < 0:
+                        i_ini = i_tmp
+                        i_fim = i_tmp + 1
+                else:
+                    if i_ini > 0:
+                        i_fim = i_tmp
+                        break
+            
+            if i_ini < 0:
+                pdr_coef = complex(expr)
+                pdr_var = ''
+                pdr_exp = 0
+            else:
+                coef_, var_, exp_ = expr.partition(expr[i_ini:i_fim])
+                pdr_coef = complex(coef_) if 'j' in coef_ else float(coef_)
+                pdr_var = var_
+                exp_ = exp_.replace("^","").replace("**","")
+
+                # Checa por upperscript
+                exp_clean_ = ""
+                for n in exp_:
+                    n_down = UPPERSCRIPT.find(n)
+                    if n_down >= 0:
+                        exp_clean_ += str(n_down)
+                    else:
+                        exp_clean_ += n
+                if exp_:
+                    pdr_exp = int(exp_clean_)
+        return pdr_coef, pdr_var, pdr_exp
+        
     # Talvez property? Se for o caso teria que mudar pra tirar do MonoNulo!
     def nulo(self):
         return False
@@ -104,7 +162,6 @@ class Monomio:
     def __repr__(self):
         return self.__str__()
 
-# TODO: Termo indie?
 # Utilizando Singleton pattern
 class MonoNulo(Monomio):
     # Classe(params) -> el = __new__(cls) -> el.__init__(self, params)
@@ -339,6 +396,21 @@ class Polinomio:
             self._raizes.add(1)
         
         # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
+    def identidade(self, other):
+        if self.get_vars() != other.get_vars():
+            return False
+        
+        # Bem direto, mas serve
+        if list(self.get_coefs()) != list(other.get_coefs()):
+            return False
+        
+        return True
+    def __eq__(self, value):
+        if isinstance(value, Polinomio):
+            return self.identidade(value)
+        else:
+            # Mesmo para poli. de grau 0 comparando a valor numérico
+            return False
     # - Computacionais -
     def get_vars(self):
         """Retorna variáveis ordenadas alfabeticamente"""
@@ -372,6 +444,8 @@ def main():
     q = Monomio(3, 0)
     r = Monomio(3, 4)
     s = Monomio(-3, 3)
+    t = Monomio(expr="(3 + j)x³")
+    print(t)
     # print(m + n)
     # o = Monomio(1, 2)
     # v = Monomio(3, 3, var="y")
@@ -379,8 +453,8 @@ def main():
     p2 = Polinomio.compor([p,q], nome = "Q")
     p3 = Polinomio.compor([r,s], nome = "R")
 
-    print(p3)
-    print(p3.get_raizes())
+    # print(p3)
+    # print(p3.get_raizes())
     
     # ex1 = Polinomio(monos = [Monomio(exp = 5),
     #                          Monomio(2, 4),
