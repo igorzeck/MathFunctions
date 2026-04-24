@@ -62,10 +62,10 @@ class Monomio:
                 # Por agora sem suporte completo! Uma vez que do contrário teria que ter
                 # Suporte para monômios com múltiplas variáveis
                 # Teoricamente retornaria um Poli!
-                return Polinomio.compor([self, other])
+                return Polinomio.compor_de_monos([self, other])
                 # raise ValueError(f"Variáveis {other.var} != {self.var}! Sem suporte!")
             if other.exp != self.exp:
-                return Polinomio.compor([self, other])
+                return Polinomio.compor_de_monos([self, other])
                 # raise ValueError(f"Expoentes {other.exp} != {self.exp}! Sem suporte!")
             if not isclose(other.coef + self.coef, 0):
                 return Monomio(other.coef + self.coef, self.exp, self.var)
@@ -226,7 +226,7 @@ class Polinomio:
         self.nome = nome
         self._raizes = set()
     @staticmethod
-    def compor(lista_monos: list[Monomio], nome: str = 'P'):
+    def compor_de_monos(lista_monos: list[Monomio], nome: str = 'P'):
         """Cria um polinômio com base em uma lista de monômios ou uma string"""
         # Organiza os monômios em um dicionário onde o grau é a chave
         # Deixa os monômios em ordem decrescente de grau
@@ -262,8 +262,10 @@ class Polinomio:
         else:
             return MonoNulo()
     @staticmethod
-    def compor_de_str(poli_str: str = ""):
+    def compor(poli_str: str = ""):
         eq_str = poli_str.partition('=')
+        if any((not s for s in eq_str)):
+            raise ValueError("String da equação inválido. Escreva no padrão 'A(x) = 1x² + 2x^4 + 3x**5'")
         m_ind = 2 if any([c.upper() for c in eq_str[0]]) else 0
         n_ind = 0 if m_ind == 2 else 2
 
@@ -277,13 +279,16 @@ class Polinomio:
         m_l = eq_str[m_ind].replace('-', '+-').replace(' ','').split('+')
         monos = [Monomio(m_str) for m_str in m_l]
 
-        return Polinomio.compor(monos, n_str)
+        return Polinomio.compor_de_monos(monos, n_str)
 
     # - Matemáticos -
     @property
     def gr(self):
         return max([m.gr for m in self.monos_pool if m])
     def get_raizes(self):
+        # Suporte atual apenas para univariáveis
+        if len(list(self.get_vars())) > 1:
+            raise ValueError("Polinômios multivariados não suportados.")
         if not self._raizes:
             self._calc_raiz()
         return self._raizes
@@ -294,6 +299,8 @@ class Polinomio:
         if k >= 0:
             # Note que o índice 0 refere-se ao "último" elemento
             k = self.gr - k
+        else:
+            k = abs(k) - 1
         if not var:
             var = self.get_vars_cat()[0]
         if k in self.monos[var]:
@@ -317,7 +324,7 @@ class Polinomio:
         mono_l = []
         for mono in self.monos_pool:
             mono_l.append(Monomio(-mono.coef, mono.exp, mono.var))
-        return Polinomio.compor(mono_l, self.nome)
+        return Polinomio.compor_de_monos(mono_l, self.nome)
     def __add__(self, other):
         monos_l = []
         var_u = set(self.monos.keys()).union(set(other.monos.keys()))
@@ -332,7 +339,7 @@ class Polinomio:
                     monos_l.append(self.monos[var][k])
                 elif k in other.monos[var]:
                     monos_l.append(other.monos[var][k])
-        return Polinomio.compor(monos_l, nome = "[" + self.nome + "+" + other.nome + "]")
+        return Polinomio.compor_de_monos(monos_l, nome = "[" + self.nome + "+" + other.nome + "]")
     def __sub__(self, other):
         # Nome poli. errado!
         return self.__add__(-other)
@@ -358,7 +365,7 @@ class Polinomio:
             mono_l = [mono_s * other for mono_s in self.monos_pool]
         else:
             raise ValueError(f"Valor inválido para multiplicação: {other}")
-        return Polinomio.compor(mono_l, nome=novo_nom)
+        return Polinomio.compor_de_monos(mono_l, nome=novo_nom)
     def __truediv__(self, other):
         """
         Retorna tupla de (quociente, Resto) -> (Monomio|Polinomio|Numerico, Monomio|Polinomio|Numerico)
@@ -366,7 +373,7 @@ class Polinomio:
         # Algorítmo da divisão
         # Por agora, par números:
         if isinstance(other, NUMERICOS):
-            return Polinomio.compor(monos=[m / other for m in self.monos_pool], nome = self.nome), MonoNulo()
+            return Polinomio.compor_de_monos(monos=[m / other for m in self.monos_pool], nome = self.nome), MonoNulo()
 
         if not isinstance(other, Polinomio):
             raise TypeError(f"Tipo {type(other)} não suportado para divisão de polinômios!")
@@ -384,7 +391,7 @@ class Polinomio:
         i = 0
         
         # Note que monos_pool já é ordenado por grau (decrescente)!
-        resto = Polinomio.compor(self.monos_pool, nome = 'R')
+        resto = Polinomio.compor_de_monos(self.monos_pool, nome = 'R')
         quociente: list[Monomio] = []
         o_termo_p = other.monos_pool[0] if isinstance(other, Polinomio) else other
 
@@ -399,16 +406,13 @@ class Polinomio:
             # iealmente feita numa lista de coeficientes não aqui!
             dif = resto - temp_poli
             if isinstance(dif, Polinomio):
-                resto = Polinomio.compor(lista_monos = dif, nome = 'R')
+                resto = Polinomio.compor_de_monos(lista_monos = dif, nome = 'R')
             elif isinstance(dif, MonoNulo):
                 resto = dif
             i += 1
         
-        return Polinomio.compor(quociente, nome='Q'), resto
-    def _calc_raiz(self, var: str = ""):
-        if not var:
-            var = self.get_vars_cat()[0]
-
+        return Polinomio.compor_de_monos(quociente, nome='Q'), resto
+    def _calc_raiz(self):
         autoreciproco = all([self.get_coef_k(k) == self.get_coef_k(self.gr - k) for k in range(self.gr // 2)])
         # -- Raizes triviais --
         # Por agora apenas suporte para uma variável
@@ -421,6 +425,34 @@ class Polinomio:
             self._raizes.add(1)
         
         # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
+        # - Raizes gerais -
+        # Raizes alfa
+        self.exp_espaco()
+
+    def exp_espaco(self):
+        # Explora o "espaço" para achar todas as raízes
+        berth = 100
+        step = int(berth * 0.01)
+
+        r_nm1 = None
+        print("")
+        for r in range(-berth,berth,step):
+            if r_nm1 is not None:
+                mult = self(r)*self(r_nm1)
+                # Condição de borda
+                # TODO: E raízes múltiplas?
+                if isclose(mult, 0) and r_nm1 not in self._raizes:
+                    print(f"Raiz em {r}!")
+                    # Meio que é feito duas vezes por agora...
+                    self._raizes.add(r)
+
+                if mult < 0:
+                    print(f"Ao menos 1 raiz entre {r_nm1} e {r}!")
+                print(r_nm1, ":", r, mult)
+            if len(self._raizes) > self.gr:
+                break
+            r_nm1 = r
+
     def identidade(self, other):
         if self.get_vars_cat() != other.get_vars():
             return False
@@ -468,7 +500,7 @@ class Polinomio:
         if not no_v:
             return val
         else:
-            return Polinomio.compor([m for m in self.monos_pool if m.var in no_v] + [Monomio(str(val))])
+            return Polinomio.compor_de_monos([m for m in self.monos_pool if m.var in no_v] + [Monomio(str(val))])
     def copiar(self, nome_copia: str = ''):
         return Polinomio(self.monos, self.monos_pool, self.nome if not nome_copia else nome_copia) 
     def __getitem__(self, key):
@@ -476,10 +508,23 @@ class Polinomio:
     def __call__(self, *args, **kwds):
         """
         Valor numérico para 1 ou mais variáveis
+        
         p(4) -> Valor numérico para variáel canônica
-        p(y = 4) -> Valor numérico para variável canônica
+        
+        p(y = 4) -> Valor numérico para variável de escolha (y)
         """
-        pass
+        if kwds:
+            vars, vals = map(list, zip(*kwds.items()))
+            return self.valor_numerico(vals, vars)
+        elif args:
+            all_vars = self.get_vars()
+            split_ind = len(args) if len(args) < len(all_vars) else len(all_vars)
+            
+            all_vars = all_vars[:split_ind]
+
+            return self.valor_numerico(args, all_vars)
+        else:
+            return 0
     # - Representação -
     def __str__(self):
         # Por agora sem to_upscritp
@@ -504,12 +549,15 @@ def main():
     # print(m + n)
     # o = Monomio(1, 2)
     # v = Monomio(3, 3, var="y")
-    p1 = Polinomio.compor([m,n,o], nome = "P")
-    p2 = Polinomio.compor([p,q], nome = "Q")
-    p3 = Polinomio.compor([r,s], nome = "R")
-    p4 = Polinomio.compor_de_str("A(x) = 2x⁴-3y   + 9")
-    print(p4.valor_numerico([1, 2], ['x','y']))
-
+    p1 = Polinomio.compor_de_monos([m,n,o], nome = "P")
+    p2 = Polinomio.compor_de_monos([p,q], nome = "Q")
+    p3 = Polinomio.compor_de_monos([r,s], nome = "R")
+    p4 = Polinomio.compor("A = 2x⁴-3y   + 9")
+    p5 = Polinomio.compor("A = 4x² - 4")
+    print(p4.valor_numerico([2, 1], ['x','y']))
+    print(p4(y=1,x=2))
+    print(p4(1))
+    print(p5.get_raizes())
     # print(p3)
     # print(p3.get_raizes())
     
