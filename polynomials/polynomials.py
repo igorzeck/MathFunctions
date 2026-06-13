@@ -1,6 +1,7 @@
 # Script representativo de polinômios e operações polinomiais
 # -- Setup --
 from math import isclose
+from sys import float_info
 # Funções
 UPPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹'
 NUMERICOS = (int, float, complex)
@@ -133,7 +134,8 @@ class Monomio:
                 pdr_exp = 0
             else:
                 coef_, var_, exp_ = expr.partition(expr[i_ini:i_fim])
-                pdr_coef = complex(coef_) if 'j' in coef_ else float(coef_)
+                # It considers blank spaces as ones for coeficients
+                pdr_coef = complex(coef_) if 'j' in coef_ else (float(coef_) if coef_ else 1.0)
                 pdr_var = var_
                 exp_ = exp_.replace("^","").replace("**","")
 
@@ -437,7 +439,32 @@ class Polinomio:
         
         # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
         # - Raizes gerais -
-        # NOTE: Foge escopo do projeto
+        # Para um poli. P
+        # 1. Busca binária até achar uma raiz
+        # 2. Divide pelo binômio (x - raiz_i) gerando poli. T(x) enquanto raiz_i for raiz de T(x)
+        # 3. Repite passo 1
+        
+        poli_t = self.copiar()
+        _max_rec = 12
+        _pivot = 0
+        _step = 1e4
+        _old_val = self.valor_numerico([_pivot])
+        _curr_val = self.valor_numerico([_pivot])
+        _curr_rec = 0
+        # - 1. Busca binária -
+        # FIXME: implementar direito
+        # NOTE: Idealmente com rel_tol, mas por garantia usando abs_tol
+        while not isclose(_curr_val, 0, abs_tol=0.001) and (_curr_rec < _max_rec):
+            if _curr_val > _old_val:
+                _pivot += _step if _pivot > 0 else (-_step)
+            else:
+                _pivot -= _step if _pivot > 0 else (-_step)
+            
+            _old_val = _curr_val
+            _curr_val = self(_pivot)
+            _step /= 2
+            _curr_rec += 1
+            print("Raiz, Valor: ", _curr_val, _pivot)
 
     def identidade(self, other):
         if self.get_vars() != other.get_vars():
@@ -465,7 +492,8 @@ class Polinomio:
         # Note que já está ordenado!
         for m in self.monos_pool:
             yield m
-    def valor_numerico(self, xi: list[complex], vars: list[str] = []) -> complex:
+    def valor_numerico(self, xi: list[complex] | complex, vars: list[str] = []) -> complex:
+        # TODO: Should verify here if xi is list of complexes not on call!
         # Idealmente o valor numérico seria uma lista de valores!
         all_v = self.get_vars()
         if not vars:
@@ -477,7 +505,6 @@ class Polinomio:
         for i, var in enumerate(vars):
             if var not in self.monos:
                 raise ValueError(f"Variável {var} não ecnontrada no polinômio {self}.")
-
             val += sum((self.monos[var][m].resolver(xi[i]) for m in self.monos[var]))
         
         if NO_VAR_STR in self.monos:
@@ -495,7 +522,7 @@ class Polinomio:
         """
         Valor numérico para 1 ou mais variáveis
         
-        p(4) -> Valor numérico para variáel canônica
+        p(4) -> Valor numérico para variável canônica
         
         p(y = 4) -> Valor numérico para variável de escolha (y)
         """
@@ -536,6 +563,10 @@ def main():
     print(p5 / Polinomio.compor("P(x)=2x"))
     print(p5 / Monomio("2x"))
     print(Monomio("2x") / p5)
+
+    p = Polinomio.compor("A = x^2 + 2x + 1")
+    print(p)
+    print(p.get_raizes())
 
 
 if __name__ == "__main__":
