@@ -5,7 +5,9 @@ from sys import float_info
 # Funções
 UPPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹'
 NUMERICOS = (int, float, complex)
-NO_VAR_STR = '_CONSTANT_'
+# NO_VAR_STR = '_CONSTANT_'
+STR_NO_VAR = ''
+GR_MAX = 100
 
 to_upscritp = lambda val: ''.join([UPPERSCRIPT[int(c)] for c in str(val)])
 # Classes
@@ -20,8 +22,8 @@ class Monomio:
         """
         # Valores default
         coef: complex = 1
-        var: str = 'x'
         exp: int = 1
+        var: str = 'x'
         expr = None
 
         if args:
@@ -47,7 +49,7 @@ class Monomio:
 
         self.coef = coef
         self.exp = exp if exp > 0 else 0
-        self.var = var if exp > 0 else NO_VAR_STR
+        self.var = var if exp > 0 else STR_NO_VAR
     # - Matemáticos -
     # Decorator '@' equivalente a gr = property(gr)
     @property
@@ -70,7 +72,7 @@ class Monomio:
             if not isclose(other.coef + self.coef, 0):
                 return Monomio(other.coef + self.coef, self.exp, self.var)
             else:
-                return MonoNulo()
+                return MonomioNulo()
         else:
             raise ValueError("Valor inválido!")
     def __iadd__(self, other):
@@ -85,6 +87,14 @@ class Monomio:
         elif isinstance(other, Monomio):
             if other.var == self.var:
                 return Monomio(other.coef * self.coef, other.exp + self.exp, self.var)
+            elif (other.var == STR_NO_VAR) or (self.var == STR_NO_VAR):
+                # XOR
+                if (other.var == STR_NO_VAR) ^ (self.var == STR_NO_VAR):
+                    return Monomio(other.coef * self.coef,
+                               other.exp if other.var != STR_NO_VAR else self.exp,
+                               self.var if self.var != STR_NO_VAR else other.var)
+                else:
+                    return Monomio(other.coef * self.coef, 0, STR_NO_VAR)
             else:
                 # Por agora sem suporte! Uma vez que do contrário teria que ter
                 # Suporte para monômios com múltiplas variáveis
@@ -108,6 +118,17 @@ class Monomio:
         var_nova = '' if exp_novo else self.var
     
         return Monomio(self.coef / other.coef, exp_novo, self.var)
+    def derivada(self):
+        _coef = self.gr
+
+        if _coef == 0:
+            return MonomioNulo()
+        
+        _exp = self.gr - 1
+        _var = self.var
+
+        return Monomio(_coef, _exp, _var)
+    
     # - Computacionais -
     def get_gr(self):
         return self.gr
@@ -130,7 +151,7 @@ class Monomio:
             
             if i_ini < 0:
                 pdr_coef = complex(expr) if 'j' in expr else float(expr)
-                pdr_var = NO_VAR_STR
+                pdr_var = STR_NO_VAR
                 pdr_exp = 0
             else:
                 coef_, var_, exp_ = expr.partition(expr[i_ini:i_fim])
@@ -176,7 +197,7 @@ class Monomio:
         return self.__str__()
 
 # Utilizando Singleton pattern
-class MonoNulo(Monomio):
+class MonomioNulo(Monomio):
     # Classe(params) -> el = __new__(cls) -> el.__init__(self, params)
     """Representação de um monômio nulo. Variável e expoentes são indefinidos."""
     _instancia = None  # Essencialmente atributo estático
@@ -266,7 +287,7 @@ class Polinomio:
             monos_pool.sort(key=Monomio.get_gr, reverse=True)
             return Polinomio(monos=monos, monos_pool=monos_pool, nome=nome)
         else:
-            return MonoNulo()
+            return MonomioNulo()
     @staticmethod
     def compor(poli_str: str = ""):
         eq_str = poli_str.partition('=')
@@ -283,7 +304,9 @@ class Polinomio:
 
         # Com tratamento para negativos
         m_l = eq_str[m_ind].replace('-', '+-').replace(' ','').split('+')
-        monos = [Monomio(m_str) for m_str in m_l]
+
+        # -x^n com n sendo o grau pode levar a um elemento vazio, daí o if
+        monos = [Monomio(m_str) for m_str in m_l if m_str]
 
         return Polinomio.compor_de_monos(monos, n_str)
 
@@ -298,7 +321,7 @@ class Polinomio:
         if not self._raizes:
             self._calc_raiz()
         return self._raizes
-    def get_coef_k(self, k: int, var: str = ""):
+    def get_coef_k(self, k: int, var: str = None):
         if abs(k) > self.gr:
             raise ValueError(f"Não há coeficiente {k} para polinômio de grau {self.gr}")
         # Suporte para index negativo
@@ -307,8 +330,10 @@ class Polinomio:
             k = self.gr - k
         else:
             k = abs(k) - 1
-        if not var:
+
+        if var is None:
             var = self.get_vars()[0]
+        
         if k in self.monos[var]:
             return self.monos[var][k].coef
         else:
@@ -326,6 +351,9 @@ class Polinomio:
                 yield mono.coef
             else:
                 yield 0
+
+    def get_coef_indie(self):
+        return self.monos[STR_NO_VAR][0]
     def __neg__(self):
         mono_l = []
         for mono in self.monos_pool:
@@ -388,20 +416,20 @@ class Polinomio:
         # Algorítmo da divisão
         # Por agora, par números:
         if isinstance(other, NUMERICOS):
-            return Polinomio.compor_de_monos(monos=[m / other for m in self.monos_pool], nome = self.nome), MonoNulo()
+            return Polinomio.compor_de_monos(monos=[m / other for m in self.monos_pool], nome = self.nome), MonomioNulo()
 
         if not isinstance(other, (Polinomio, Monomio)):
             raise TypeError(f"Tipo {type(other)} não suportado para divisão de polinômios!")
         
         if self.gr < other.gr:
             # Talvez retornar copia ao invés de self? Com o nome 'R'
-            return MonoNulo(), self.copiar("R")
+            return MonomioNulo(), self.copiar("R")
         
         # Sem suporte para polinômios multivariados
         if len(self.get_vars()) > 1:
             raise ValueError("Divião não suportada para polinômios multivariados!")
         
-        max_iter = 100  # Teoricamente pode lidar com polinômios de grau máximo = 100!
+        max_iter = GR_MAX  # Teoricamente pode lidar com polinômios de grau máximo = MAX_GR!
         i = 0
         
         # Note que monos_pool já é ordenado por grau (decrescente)!
@@ -409,7 +437,7 @@ class Polinomio:
         quociente: list[Monomio] = []
         o_termo_p = other.monos_pool[0] if isinstance(other, Polinomio) else other
 
-        while (i < max_iter) and (resto.gr >= other.gr) and not (resto is MonoNulo):
+        while (i < max_iter) and (resto.gr >= other.gr) and not (resto is MonomioNulo()):
             mono_q = resto.monos_pool[0] / o_termo_p
             quociente.append(mono_q)
 
@@ -420,51 +448,83 @@ class Polinomio:
             dif = resto - temp_poli
             if isinstance(dif, Polinomio):
                 resto = Polinomio.compor_de_monos(lista_monos = dif, nome = 'R')
-            elif isinstance(dif, MonoNulo):
+            elif isinstance(dif, MonomioNulo):
                 resto = dif
             i += 1
         
         return Polinomio.compor_de_monos(quociente, nome='Q'), resto
     def _calc_raiz(self):
-        autoreciproco = all([self.get_coef_k(k) == self.get_coef_k(self.gr - k) for k in range(self.gr // 2)])
+        # autoreciproco = all([self.get_coef_k(k) == self.get_coef_k(self.gr - k) for k in range(self.gr // 2)])
         # -- Raizes triviais --
-        # Por agora apenas suporte para uma variável
-        # Raiz 0
-        if self.get_coef_k(-1) == 0:
-            self._raizes.append(0)
-        # - Raizes autorecíprocas e recíprocas -
-        # Raiz 1
-        if sum(self.get_coefs()) == 0:
-            self._raizes.append(1)
+        # # Por agora apenas suporte para uma variável
+        # # Raiz 0
+        # if self.get_coef_k(-1) == 0:
+        #     self._raizes.append(0)
+        # # - Raizes autorecíprocas e recíprocas -
+        # # Raiz 1
+        # if sum(self.get_coefs()) == 0:
+        #     self._raizes.append(1)
         
         # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
         # - Raizes gerais -
         # Para um poli. P
-        # 1. Busca binária até achar uma raiz
+        # 0. Tira derivada do poli.
+        # 1. Newton-Raphson -> Móudlo quebraria derivada, então é usando um clamp
         # 2. Divide pelo binômio (x - raiz_i) gerando poli. T(x) enquanto raiz_i for raiz de T(x)
         # 3. Repite passo 1
-        
         poli_t = self.copiar()
-        _max_rec = 12
-        _pivot = 0
-        _step = 1e4
-        _old_val = self.valor_numerico([_pivot])
-        _curr_val = self.valor_numerico([_pivot])
-        _curr_rec = 0
-        # - 1. Busca binária -
-        # FIXME: implementar direito
-        # NOTE: Idealmente com rel_tol, mas por garantia usando abs_tol
-        while not isclose(_curr_val, 0, abs_tol=0.001) and (_curr_rec < _max_rec):
-            if _curr_val > _old_val:
-                _pivot += _step if _pivot > 0 else (-_step)
-            else:
-                _pivot -= _step if _pivot > 0 else (-_step)
+        curr_super_iter = 0
+        
+        while curr_super_iter < self.gr:
+            # Derivada do poli_t
+            poli_d = Polinomio.compor_de_monos(lista_monos=[m.derivada() for m in poli_t.monos_pool], nome='dP')
+            print(poli_d)
+            max_iter = 24
+            curr_iter = 0
+            curr_x = 0
+            curr_y = poli_t(curr_x)
+            fator_dec = 0.4
             
-            _old_val = _curr_val
-            _curr_val = self(_pivot)
-            _step /= 2
-            _curr_rec += 1
-            print("Raiz, Valor: ", _curr_val, _pivot)
+            while curr_iter < max_iter:
+                # Newton-Raphson
+                # TODO: Amostra aleatórias de x para evitar local minimas?
+                # Checking before first iteration to check if inital curr_x is 0
+                curr_y = poli_t(curr_x)
+                
+                print("x, f(x):", curr_x, curr_y)
+
+                if isclose(curr_y, 0, abs_tol=0.000001):
+                    break
+
+                _razao = -(curr_y / poli_d(curr_x))
+
+                curr_x = curr_x - _razao * fator_dec
+
+                curr_iter += 1
+
+            print("x_0:", curr_x)
+            # (x - raiz)
+            # TODO: Talvez 'x - -val' ?
+            binomio = Polinomio.compor(f"B(x) = x {'-' if curr_x > 0 else '+'} {abs(curr_x)}")
+
+            # TODO: Briot-Ruffini talvez?
+            print(binomio)
+            print(poli_t)
+
+            _resto = MonomioNulo()
+            
+            while _resto is MonomioNulo():
+                poli_t, _resto = poli_t / binomio
+                self._raizes.append(curr_x)
+            
+            print(poli_t)
+
+            if poli_t.gr == 0:
+                # self._raizes.append(poli_t.get_coef_indie())
+                break
+            
+        print(self._raizes)
+
 
     def identidade(self, other):
         if self.get_vars() != other.get_vars():
@@ -482,20 +542,23 @@ class Polinomio:
             # Mesmo para poli. de grau 0 comparando a valor numérico
             return False
     # - Computacionais -
+    def __iter__(self):
+        # Note que já está ordenado!
+        for m in self.monos_pool:
+            yield m
     def get_vars_indie(self):
         """Retorna variáveis ordenadas alfabeticamente com todas categorias (inclui termos indenpendentes)"""
         return sorted(list({m.var for m in self.monos_pool}))
     def get_vars(self):
         """Retorna variáveis ordenadas alfabeticamente"""
-        return sorted(list({m.var for m in self.monos_pool if m.var != NO_VAR_STR}))
-    def __iter__(self):
-        # Note que já está ordenado!
-        for m in self.monos_pool:
-            yield m
+        return sorted(list({m.var for m in self.monos_pool if m.var != STR_NO_VAR}))
     def valor_numerico(self, xi: list[complex] | complex, vars: list[str] = []) -> complex:
         # TODO: Should verify here if xi is list of complexes not on call!
         # Idealmente o valor numérico seria uma lista de valores!
         all_v = self.get_vars()
+        # Checa se é apendas independente
+        if self.gr == 0:
+            return self.get_coef_indie().coef
         if not vars:
             vars = [all_v[0]]
 
@@ -507,8 +570,8 @@ class Polinomio:
                 raise ValueError(f"Variável {var} não ecnontrada no polinômio {self}.")
             val += sum((self.monos[var][m].resolver(xi[i]) for m in self.monos[var]))
         
-        if NO_VAR_STR in self.monos:
-            val += self.monos[NO_VAR_STR][0].resolver(0)
+        if STR_NO_VAR in self.monos:
+            val += self.monos[STR_NO_VAR][0].resolver(0)
 
         if not no_v:
             return val
@@ -550,21 +613,12 @@ class Polinomio:
 
 
 def main():
-    m = Monomio(1.0, 2)
-    n = Monomio(2, 1)
-    o = Monomio(1.0, 0)
-    
-    p1 = Polinomio.compor_de_monos([m,n,o], nome = "P")
-    p4 = Polinomio.compor("A = 2x⁴-3y   + 9")
-    p5 = Polinomio.compor("A = 4x² - 4")
-    print(p4.valor_numerico([2, 1], ['x','y']))
-    print(p4(y=1,x=2))
-    print(p4(1))
-    print(p5 / Polinomio.compor("P(x)=2x"))
-    print(p5 / Monomio("2x"))
-    print(Monomio("2x") / p5)
-
-    p = Polinomio.compor("A = x^2 + 2x + 1")
+    #FIXME: Porque o '[0]' printado no fim da execução
+    # p = Polinomio.compor("A = x^2 + 2x + 1")
+    # p = Polinomio.compor("y = x^2 - 3x + 2")
+    p = Polinomio.compor("y = -3x^3 + 9x^2 - 6x")
+    # p = Polinomio.compor("y = -3x^2 + 9x - 6")
+    # p = Polinomio.compor("y = -3x + 3")
     print(p)
     print(p.get_raizes())
 
