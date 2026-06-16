@@ -8,8 +8,8 @@ NUMERICOS = (int, float, complex)
 # NO_VAR_STR = '_CONSTANT_'
 STR_NO_VAR = ''
 GR_MAX = 100
-MAX_CASAS_DEC = 2
-TOL_ABS = 0.001
+MAX_CASAS_DEC = 6
+TOL_ABS = 1e-13
 
 to_upscritp = lambda val: ''.join([UPPERSCRIPT[int(c)] for c in str(val)])
 # Classes
@@ -125,7 +125,7 @@ class Monomio:
     
         return Monomio(self.coef / other.coef, exp_novo, self.var)
     def derivada(self):
-        _coef = self.gr
+        _coef = self.gr * self.coef
 
         if _coef == 0:
             return MonomioNulo()
@@ -494,15 +494,15 @@ class Polinomio:
         while curr_super_iter < self.gr:
             # Derivada do poli_t
             poli_d = Polinomio.compor_de_monos(lista_monos=[m.derivada() for m in poli_t.monos_pool], nome='dP')
+            print(poli_d)
             max_iter = 36
             curr_iter = 0
             curr_x = 0
             curr_y = poli_t(curr_x)
-            fator_dec = 0.3
+            fator_dec = 1
             
             while curr_iter < max_iter:
                 # Newton-Raphson
-                # TODO: Amostra aleatórias de x para evitar local minimas?
                 # Checking before first iteration to check if inital curr_x is 0
                 curr_y = poli_t(curr_x)
                 
@@ -536,7 +536,6 @@ class Polinomio:
         
             print("x_0:", curr_x)
             # (x - raiz)
-            # TODO: Talvez 'x - -val' ?
             binomio = Polinomio.compor(f"B(x) = x {'-' if curr_x > 0 else '+'} {abs(curr_x)}")
 
             # TODO: Briot-Ruffini talvez?
@@ -590,7 +589,6 @@ class Polinomio:
         """Retorna variáveis ordenadas alfabeticamente"""
         return sorted(list({m.var for m in self.monos_pool if m.var != STR_NO_VAR}))
     def valor_numerico(self, xi: list[complex] | complex, vars: list[str] = []) -> complex:
-        # TODO: Should verify here if xi is list of complexes not on call!
         # Idealmente o valor numérico seria uma lista de valores!
         all_v = self.get_vars()
         # Checa se é apendas independente
@@ -650,14 +648,13 @@ class Polinomio:
 
 
 def main():
-    #FIXME: Porque o '[0]' printado no fim da execução
     # p = Polinomio.compor("A = x^2 + 2x + 1")
     # p = Polinomio.compor("y = x^2 - 3x + 2")
-    p = Polinomio.compor("y = -3x^3 + 9x^2 - 6x")
+    # p = Polinomio.compor("y = -3x^3 + 9x^2 - 6x")
+    # Quebra em imaginários
     # Tem 1 raiz REAL só: (y = 3x^3 + 2x^2 + 1)!
     # p = Polinomio.compor("y = 3x^3 + 2x^2 + 1")
-    # p = Polinomio.compor("y = -3x^2 + 9x - 6")
-    # p = Polinomio.compor("y = -3x + 3")
+
     print(p)
     print(p.get_raizes())
 
