@@ -8,6 +8,8 @@ NUMERICOS = (int, float, complex)
 # NO_VAR_STR = '_CONSTANT_'
 STR_NO_VAR = ''
 GR_MAX = 100
+MAX_CASAS_DEC = 2
+TOL_ABS = 0.001
 
 to_upscritp = lambda val: ''.join([UPPERSCRIPT[int(c)] for c in str(val)])
 # Classes
@@ -46,6 +48,9 @@ class Monomio:
 
         if expr:
             coef, var, exp = self._ler_expr(expr, coef, var, exp)
+        
+        if coef == 0 and self.__class__ != MonomioNulo:
+            raise AttributeError("Coeificente de monomio não pode ser zero. user MonomioNulo.")
 
         self.coef = coef
         self.exp = exp if exp > 0 else 0
@@ -69,7 +74,8 @@ class Monomio:
                 return Polinomio.compor_de_monos([self, other])
             if other.exp != self.exp:
                 return Polinomio.compor_de_monos([self, other])
-            if not isclose(other.coef + self.coef, 0):
+            _val = other.coef + self.coef
+            if not isclose(_val, 0):
                 return Monomio(other.coef + self.coef, self.exp, self.var)
             else:
                 return MonomioNulo()
@@ -283,6 +289,10 @@ class Polinomio:
                     if not v.nulo():
                         monos[var][k] = v
                         monos_pool.append(v)
+        # Checa se dict do mono STR_NO_VAR está vazio (Elemento nulo)
+        if STR_NO_VAR in monos:
+            if not monos[STR_NO_VAR]:
+                monos.pop(STR_NO_VAR)
         if monos_pool:
             monos_pool.sort(key=Monomio.get_gr, reverse=True)
             return Polinomio(monos=monos, monos_pool=monos_pool, nome=nome)
@@ -291,8 +301,10 @@ class Polinomio:
     @staticmethod
     def compor(poli_str: str = ""):
         eq_str = poli_str.partition('=')
+
         if any((not s for s in eq_str)):
             raise ValueError("String da equação inválido. Escreva no padrão 'A(x) = 1x² + 2x^4 + 3x**5'")
+        
         m_ind = 2 if any([c.upper() for c in eq_str[0]]) else 0
         n_ind = 0 if m_ind == 2 else 2
 
@@ -306,7 +318,8 @@ class Polinomio:
         m_l = eq_str[m_ind].replace('-', '+-').replace(' ','').split('+')
 
         # -x^n com n sendo o grau pode levar a um elemento vazio, daí o if
-        monos = [Monomio(m_str) for m_str in m_l if m_str]
+        # E guard contra monomios nulos
+        monos = [Monomio(m_str) for m_str in m_l if (m_str and m_str != '0')]
 
         return Polinomio.compor_de_monos(monos, n_str)
 
@@ -446,6 +459,7 @@ class Polinomio:
             # Possível que não zere o termo principal! A conta deveria ser
             # iealmente feita numa lista de coeficientes não aqui!
             dif = resto - temp_poli
+            
             if isinstance(dif, Polinomio):
                 resto = Polinomio.compor_de_monos(lista_monos = dif, nome = 'R')
             elif isinstance(dif, MonomioNulo):
@@ -466,24 +480,25 @@ class Polinomio:
         #     self._raizes.append(1)
         
         # Caso seja autorecíproco para toda raiz ele terá sua inversa garantida
-        # - Raizes gerais -
+        # - Raizes gerais (APENSA ACHA RAÍZES REAIS) -
         # Para um poli. P
         # 0. Tira derivada do poli.
         # 1. Newton-Raphson -> Móudlo quebraria derivada, então é usando um clamp
         # 2. Divide pelo binômio (x - raiz_i) gerando poli. T(x) enquanto raiz_i for raiz de T(x)
         # 3. Repite passo 1
+        # OBS: Esse algorítmo não pode calcular raízes complexas, essas são retornadas como NONE
         poli_t = self.copiar()
         curr_super_iter = 0
+        last_curr_x = None
         
         while curr_super_iter < self.gr:
             # Derivada do poli_t
             poli_d = Polinomio.compor_de_monos(lista_monos=[m.derivada() for m in poli_t.monos_pool], nome='dP')
-            print(poli_d)
-            max_iter = 24
+            max_iter = 36
             curr_iter = 0
             curr_x = 0
             curr_y = poli_t(curr_x)
-            fator_dec = 0.4
+            fator_dec = 0.3
             
             while curr_iter < max_iter:
                 # Newton-Raphson
@@ -493,15 +508,32 @@ class Polinomio:
                 
                 print("x, f(x):", curr_x, curr_y)
 
-                if isclose(curr_y, 0, abs_tol=0.000001):
+                if isclose(curr_y, 0, abs_tol=TOL_ABS):
                     break
 
-                _razao = -(curr_y / poli_d(curr_x))
+                _divisor = poli_d(curr_x)
 
-                curr_x = curr_x - _razao * fator_dec
+                if _divisor == 0:
+                    # Por agora valor arbitrário
+                    _divisor += TOL_ABS * 1000
+
+                # O que fazer aqui com esse '-' ?
+                curr_x = curr_x - (curr_y / _divisor) * fator_dec
 
                 curr_iter += 1
+            
+            # Para equações sem raízes (fica preso na local minima)
+            if last_curr_x is not None:
+                if isclose(last_curr_x, curr_x, abs_tol=TOL_ABS):
+                    break
 
+            # FALBACK
+            curr_super_iter += 1
+
+            # Precisão aceita: MAX_CASAS_DEC
+            curr_x = round(curr_x, ndigits=MAX_CASAS_DEC)
+            last_curr_x = curr_x
+        
             print("x_0:", curr_x)
             # (x - raiz)
             # TODO: Talvez 'x - -val' ?
@@ -512,13 +544,18 @@ class Polinomio:
             print(poli_t)
 
             _resto = MonomioNulo()
-            
-            while _resto is MonomioNulo():
-                poli_t, _resto = poli_t / binomio
-                self._raizes.append(curr_x)
-            
-            print(poli_t)
+            poli_t, _resto = poli_t / binomio
+            self._raizes.append(curr_x)
 
+            novo_t, _resto = poli_t / binomio
+            
+            # NOTE: Comparar com MonomioNulo "cria" uma instância da referência dele aqui... Não ideal
+            while _resto is MonomioNulo():
+                self._raizes.append(curr_x)
+                print("Got", poli_t, _resto)
+                poli_t = novo_t
+                novo_t, _resto = poli_t / binomio
+            
             if poli_t.gr == 0:
                 # self._raizes.append(poli_t.get_coef_indie())
                 break
@@ -617,6 +654,8 @@ def main():
     # p = Polinomio.compor("A = x^2 + 2x + 1")
     # p = Polinomio.compor("y = x^2 - 3x + 2")
     p = Polinomio.compor("y = -3x^3 + 9x^2 - 6x")
+    # Tem 1 raiz REAL só: (y = 3x^3 + 2x^2 + 1)!
+    # p = Polinomio.compor("y = 3x^3 + 2x^2 + 1")
     # p = Polinomio.compor("y = -3x^2 + 9x - 6")
     # p = Polinomio.compor("y = -3x + 3")
     print(p)
